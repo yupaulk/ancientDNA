@@ -124,7 +124,7 @@ metadata_prep = metadata_prep %>%
 
 ### Load libraries
 
-```{r}
+```{r, results = 'hide', message = FALSE, warning = FALSE}
 library(ggplot2)
 library(tidyverse)
 ```
@@ -212,13 +212,18 @@ sum(is.na(DeltaD_mean_strep))
 
 # Plots for DeltaD_mean
 
-```{r}
+```{r, results = 'hide', message = FALSE, warning = FALSE}
 index <- which(!is.na(DeltaD_mean))
 
 ggplot(data.frame(DeltaD_mean), aes(x = index, y = DeltaD_mean)) +
     geom_point(color = "blue", size = 3, alpha = 0.7) +
     theme_minimal() +
     ggtitle(paste("Scatter plot of DeltaD_mean"))
+
+ggplot(data.frame(DeltaD_mean), aes(x = DeltaD_mean)) +
+    geom_histogram(binwidth = 0.002, fill = "blue", color = "black", alpha = 0.7)
+    theme_minimal() +
+    ggtitle(paste("Histogram of DeltaD_mean"))
 
 ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean", y = DeltaD_mean)) +
     geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
@@ -236,13 +241,18 @@ shapiro.test(DeltaD_mean)
 
 # Plots for DeltaD_mean_methano
 
-```{r}
+```{r, results = 'hide', message = FALSE, warning = FALSE}
 index <- which(!is.na(DeltaD_mean_methano))
 
 ggplot(data.frame(DeltaD_mean_methano), aes(x = index, y = DeltaD_mean_methano)) +
     geom_point(color = "blue", size = 3, alpha = 0.7) +
     theme_minimal() +
     ggtitle(paste("Scatter plot of DeltaD_mean_methano"))
+
+ggplot(data.frame(DeltaD_mean_methano), aes(x = DeltaD_mean_methano)) +
+    geom_histogram(binwidth = 0.002, fill = "blue", color = "black", alpha = 0.7)
+    theme_minimal() +
+    ggtitle(paste("Histogram of DeltaD_mean_methano"))
 
 ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean_methano", y = DeltaD_mean_methano)) +
     geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
@@ -260,13 +270,18 @@ shapiro.test(DeltaD_mean_methano)
 
 # Plots for DeltaD_mean_por
 
-```{r}
+```{r, results = 'hide', message = FALSE, warning = FALSE}
 index <- which(!is.na(DeltaD_mean_por))
 
 ggplot(data.frame(DeltaD_mean_por), aes(x = index, y = DeltaD_mean_por)) +
     geom_point(color = "blue", size = 3, alpha = 0.7) +
     theme_minimal() +
     ggtitle(paste("Scatter plot of DeltaD_mean_por"))
+
+ggplot(data.frame(DeltaD_mean_por), aes(x = DeltaD_mean_por)) +
+    geom_histogram(binwidth = 0.002, fill = "blue", color = "black", alpha = 0.7)
+    theme_minimal() +
+    ggtitle(paste("Histogram of DeltaD_mean_por"))
 
 ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean_por", y = DeltaD_mean_por)) +
     geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
@@ -284,13 +299,18 @@ shapiro.test(DeltaD_mean_por)
 
 # Plots for DeltaD_mean_strep
 
-```{r}
+```{r, results = 'hide', message = FALSE, warning = FALSE}
 index <- which(!is.na(DeltaD_mean_strep))
 
 ggplot(data.frame(DeltaD_mean_strep), aes(x = index, y = DeltaD_mean_strep)) +
     geom_point(color = "blue", size = 3, alpha = 0.7) +
     theme_minimal() +
     ggtitle(paste("Scatter plot of DeltaD_mean_strep"))
+
+ggplot(data.frame(DeltaD_mean_strep), aes(x = DeltaD_mean_strep)) +
+    geom_histogram(binwidth = 0.002, fill = "blue", color = "black", alpha = 0.7)
+    theme_minimal() +
+    ggtitle(paste("Histogram of DeltaD_mean_strep"))
 
 ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean_strep", y = DeltaD_mean_strep)) +
     geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
