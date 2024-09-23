@@ -1,0 +1,307 @@
+---
+title: "EDA"
+author: "Paul K. Yu"
+date: "2024-09-23"
+output: pdf_document
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE, warning = FALSE, fig.show = 'hide'}
+####Analysis of Covariation#########################
+####Michelle Nixon##################################
+####April 12, 2021##################################
+var.explained.eta <- function(posterior){
+  eta.data <- posterior$Eta
+  eta.pred <- predict(posterior, response = "LambdaX")
+  exp.mat <- matrix(NA, nrow=dim(eta.pred)[3],ncol = 1)
+  
+  for(i in 1:dim(eta.pred)[3]){
+    var_fit = sum(apply(eta.pred[,,i], MARGIN = 1, FUN = "var"))
+    var_res = sum(apply(eta.pred[,,i] - eta.data[,,i], MARGIN = 1, FUN = "var"))
+    var_total = sum(apply(eta.data[,,i], MARGIN = 1, FUN = "var"))
+    exp.mat[i,1] = var_fit/ (var_fit + var_res)
+  }
+  return(exp.mat)
+}
+
+##Loading libraries
+##Fido needs to be installed using github
+##phyloseq and microbiome need to be installed using BioManager 
+library(phyloseq)
+library(fido)
+library(driver)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(stringi)
+library(stringr)
+
+##Setting the seed
+set.seed(2021)
+
+#####Part 1: Reading, Filtering, and Processing Metadata/OTU data#####
+
+###Reading in the metadata
+metadata = read.delim(file.path("Data", "BritishData", "All_Metadata_2282021.txt"))
+
+##Filtering metadata to Museum of London only with a value for Date_100
+metadata_london = metadata %>%
+  filter(str_detect(Museum,"MoL")) %>%
+  filter(!is.na(BlackDeath_1346_1353)) 
+
+dim(metadata_london)
+
+###Reading in the OTU data
+OTU_data = read.delim(file.path("Data", "BritishData", "AllSamples_20210212_RawAbsolute_AllTaxa.txt"))
+dim(OTU_data)
+
+##Light cleaning of the names so the taxanomic information is of the same type for every taxa
+otu.names.all = str_sub(OTU_data$X.Datasets, end=-2)
+otu.names.all = gsub(";[a-zA-Z /]+ group", "", otu.names.all)
+otu.names.all = gsub(";[a-zA-Z /]+ incertae sedis", "", otu.names.all)
+otu.names.all = gsub(";[a-zA-Z /]+ complex", "", otu.names.all)
+otu.names.all = gsub(";[a-zA-Z /]+ subgroup", "", otu.names.all)
+otu.names.all = gsub(";[a-zA-Z /]+ subdivisions", "", otu.names.all)
+otu.names.all = gsub(";Polyangiaceae", "", otu.names.all)
+
+otu.names.all = stri_list2matrix(str_split(otu.names.all, ";"), byrow=TRUE)
+otu.names.all = as.data.frame(otu.names.all)
+names(otu.names.all) = c("root", "cellular", "Kingdom", "Phyla", "Class", "Order", "Family", "Genus", "Species")
+
+##Subsetting to the genus level
+OTU_data$X.Datasets = otu.names.all$Genus
+
+OTU_data = OTU_data %>%
+  filter(!is.na(X.Datasets)) %>%
+  group_by(X.Datasets) %>%
+  summarise_each(funs(sum)) %>%
+  remove_rownames %>% 
+  column_to_rownames(var="X.Datasets") 
+
+###Filtering the OTU data to include the samples in the metadata only
+###Filter the OTU data
+london.names = paste0("X",metadata_london$X.SampleID)
+OTU.london = OTU_data[,colnames(OTU_data) %in% c(london.names,metadata_london$X.SampleID)]
+
+##Now, reverse (filtering out metadata to contain only OTU samples) just in case
+metadata_london = metadata_london[paste0("X",metadata_london$X.SampleID)%in% colnames(OTU.london), ]
+
+##Checking dimensions
+dim(OTU.london)
+dim(metadata_london)
+
+##Now, we need to filter out the OTU data.
+##First, a quick plot of the rowSums
+OTU.london %>% rowSums() %>% ecdf() %>% base::plot() %>% abline(v=1e6)
+###Looks like 40% of the samples have counts of zero
+
+###Use a conservative filtering rule
+###Filter out all taxa that don't have a count of at least one in 30% of samples
+filtered = rowSums(OTU.london > 1) < .25*ncol(OTU.london)
+other.tot = colSums(OTU.london[filtered,])
+otu.filtered = rbind(OTU.london[!filtered,], "Other" = other.tot)
+dim(otu.filtered)
+
+###Reordering metadata_london to match the OTU table
+metadata_london = metadata_london[match(colnames(otu.filtered), paste0("X", metadata_london$X.SampleID)),]
+
+latLongs = read.csv(file.path("Data", "BritishData", "cemetryLocations.csv"))
+
+metadata_london$LateDate = ifelse(is.na(metadata_london$LateDate), stri_list2matrix(str_split(metadata_london$Date_100,"_"))[,2],metadata_london$LateDate)
+
+##Creating the final metadata with the needed variables
+metadata_prep = metadata_london %>%
+  select(X.SampleID, Date_100, Date_200, Date_300, BlackDeath_PrePost, EarlyDate, LateDate, MedievalPostMedieval, Cemetry, MaxillaMandible, BuccalLingual, SubSupragingival, Tooth, Tooth_Simplified, BlackDeath_1346_1353)
+
+##Merging in the mapDamage data
+metadata_MD = read.csv(file.path("Data", "BritishData", "metadata_mapDamage.csv")) %>%
+  mutate(X.SampleID = Sample) %>%
+  select(X.SampleID, DeltaD_mean, DeltaD_mean_methano, DeltaD_mean_por, DeltaD_mean_strep)
+
+metadata_prep = metadata_prep %>%
+  join(metadata_MD, by = "X.SampleID")
+
+```
+
+### Load libraries
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+```
+
+### We want to do an exploratory data analysis on the damage data.
+
+```{r}
+head(metadata_prep)
+```
+### Structure of the data
+
+```{r}
+str(metadata_prep)
+```
+
+### Summary of the data
+
+```{r}
+summary(metadata_prep)
+```
+
+### From the [mapDamage website](https://ginolhac.github.io/mapDamage/)
+### DeltaD, the cytosine deamination probability in double strand context.
+### DeltaS, the cytosine deamination probability in single strand context.
+
+```{r}
+DeltaD_mean <- metadata_prep$DeltaD_mean
+DeltaD_mean_methano <- metadata_prep$DeltaD_mean_methano
+DeltaD_mean_por <- metadata_prep$DeltaD_mean_por
+DeltaD_mean_strep <- metadata_prep$DeltaD_mean_strep
+
+# For DeltaD_mean:
+# Get NA indices
+na_indices <- which(is.na(DeltaD_mean))
+
+# Calculate mean
+mean_value <- mean(DeltaD_mean, na.rm = TRUE)
+
+# Impute NA values with the calculated mean
+DeltaD_mean[na_indices] <- mean_value
+
+# Recheck NA (should be zero)
+sum(is.na(DeltaD_mean))
+
+# For DeltaD_mean_methano:
+# Get NA indices
+na_indices <- which(is.na(DeltaD_mean_methano))
+
+# Calculate mean
+mean_value <- mean(DeltaD_mean_methano, na.rm = TRUE)
+
+# Impute NA values with the calculated mean
+DeltaD_mean_methano[na_indices] <- mean_value
+
+# Recheck NA (should be zero)
+sum(is.na(DeltaD_mean_methano))
+
+# For DeltaD_mean_por:
+# Get NA indices
+na_indices <- which(is.na(DeltaD_mean_por))
+
+# Calculate mean
+mean_value <- mean(DeltaD_mean_por, na.rm = TRUE)
+
+# Impute NA values with the calculated mean
+DeltaD_mean_por[na_indices] <- mean_value
+
+# Recheck NA (should be zero)
+sum(is.na(DeltaD_mean_por))
+
+# For DeltaD_mean_strep:
+# Get NA indices
+na_indices <- which(is.na(DeltaD_mean_strep))
+
+# Calculate mean
+mean_value <- mean(DeltaD_mean_strep, na.rm = TRUE)
+
+# Impute NA values with the calculated mean
+DeltaD_mean_strep[na_indices] <- mean_value
+
+# Recheck NA (should be zero)
+sum(is.na(DeltaD_mean_strep))
+
+```
+
+# Plots for DeltaD_mean
+
+```{r}
+index <- which(!is.na(DeltaD_mean))
+
+ggplot(data.frame(DeltaD_mean), aes(x = index, y = DeltaD_mean)) +
+    geom_point(color = "blue", size = 3, alpha = 0.7) +
+    theme_minimal() +
+    ggtitle(paste("Scatter plot of DeltaD_mean"))
+
+ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean", y = DeltaD_mean)) +
+    geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
+    theme_minimal() +
+    ggtitle(paste("Box plot of DeltaD_mean"))
+
+ggplot(data.frame(DeltaD_mean), aes(sample = DeltaD_mean)) +
+    geom_qq() +
+    geom_qq_line(color = "red") +
+    theme_minimal() +
+    ggtitle(paste("QQ plot of DeltaD_mean"))
+
+shapiro.test(DeltaD_mean)
+```
+
+# Plots for DeltaD_mean_methano
+
+```{r}
+index <- which(!is.na(DeltaD_mean_methano))
+
+ggplot(data.frame(DeltaD_mean_methano), aes(x = index, y = DeltaD_mean_methano)) +
+    geom_point(color = "blue", size = 3, alpha = 0.7) +
+    theme_minimal() +
+    ggtitle(paste("Scatter plot of DeltaD_mean_methano"))
+
+ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean_methano", y = DeltaD_mean_methano)) +
+    geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
+    theme_minimal() +
+    ggtitle(paste("Box plot of DeltaD_mean_methano"))
+
+ggplot(data.frame(DeltaD_mean_methano), aes(sample = DeltaD_mean_methano)) +
+    geom_qq() +
+    geom_qq_line(color = "red") +
+    theme_minimal() +
+    ggtitle(paste("QQ plot of DeltaD_mean_methano"))
+
+shapiro.test(DeltaD_mean_methano)
+```
+
+# Plots for DeltaD_mean_por
+
+```{r}
+index <- which(!is.na(DeltaD_mean_por))
+
+ggplot(data.frame(DeltaD_mean_por), aes(x = index, y = DeltaD_mean_por)) +
+    geom_point(color = "blue", size = 3, alpha = 0.7) +
+    theme_minimal() +
+    ggtitle(paste("Scatter plot of DeltaD_mean_por"))
+
+ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean_por", y = DeltaD_mean_por)) +
+    geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
+    theme_minimal() +
+    ggtitle(paste("Box plot of DeltaD_mean_por"))
+
+ggplot(data.frame(DeltaD_mean_por), aes(sample = DeltaD_mean_por)) +
+    geom_qq() +
+    geom_qq_line(color = "red") +
+    theme_minimal() +
+    ggtitle(paste("QQ plot of DeltaD_mean_por"))
+
+shapiro.test(DeltaD_mean_por)
+```
+
+# Plots for DeltaD_mean_strep
+
+```{r}
+index <- which(!is.na(DeltaD_mean_strep))
+
+ggplot(data.frame(DeltaD_mean_strep), aes(x = index, y = DeltaD_mean_strep)) +
+    geom_point(color = "blue", size = 3, alpha = 0.7) +
+    theme_minimal() +
+    ggtitle(paste("Scatter plot of DeltaD_mean_strep"))
+
+ggplot(data.frame(DeltaD_mean), aes(x = "DeltaD_mean_strep", y = DeltaD_mean_strep)) +
+    geom_boxplot(fill = "blue", alpha = 0.7, width = 0.2) +
+    theme_minimal() +
+    ggtitle(paste("Box plot of DeltaD_mean_strep"))
+
+ggplot(data.frame(DeltaD_mean_strep), aes(sample = DeltaD_mean_strep)) +
+    geom_qq() +
+    geom_qq_line(color = "red") +
+    theme_minimal() +
+    ggtitle(paste("QQ plot of DeltaD_mean_strep"))
+
+shapiro.test(DeltaD_mean_strep)
+```
